@@ -23,6 +23,9 @@ def make_rect(points):
     return Rectangle([(lx, ly), (rx, ry)])
 
 
+def draw_roi(image, roi, color, thin):
+    return cv2.rectangle(image, roi[0], roi[1], color, thin)
+
 def points_to_rectangles(contours):
     rectangles = []
     for points in contours:
@@ -55,15 +58,32 @@ def make_regions(image, filter, filter_arg, reverse=True):
     return final_roi
 
 
-def draw_roi(image, roi, color, thin):
-    return cv2.rectangle(image, roi.points[0], roi.points[1], color, thin)
+def union_intersection(img, regions):
+    bin_img = img_to_binary(img)
+
+    for region in regions:
+        bin_img = draw_roi(bin_img, region.points, 0, -1)
+
+    regions = make_regions(input_img, size_filter, [10,])
+    return regions
 
 
 if __name__ == "__main__":
     input_img = sample_img()
     roi_img = input_img.copy()
-    rois = make_regions(input_img, size_filter, [50,])
+    rois = make_regions(input_img, size_filter, [10,])
+
     for roi in rois:
-        roi_img = draw_roi(roi_img, roi, [0,255,0], 1)
+        roi_img = draw_roi(roi_img, roi.points, [0,255,0], 1)
+
+    cv_imshow("roi", roi_img, 0)
+
+    rois = union_intersection(input_img, rois)
+
+    roi_img = input_img.copy()
+    cv_imshow("roi", roi_img, 0)
+
+    for roi in rois:
+        roi_img = draw_roi(roi_img, roi.points, [0, 255, 0], -1)
 
     cv_imshow("roi", roi_img, 0)
