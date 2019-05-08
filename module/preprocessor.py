@@ -133,8 +133,9 @@ if __name__ == "__main__":
     rois = split_horizontal_regions(erased_img, rois)
 
     roi_img = input_img.copy()
+
+    cv_imshow("roi", roi_img, 0)
     for roi in rois:
         roi_img = draw_roi(roi_img, roi.points, [0, 255, 0], 1)
 
     cv_imshow("roi", roi_img, 0)
-
