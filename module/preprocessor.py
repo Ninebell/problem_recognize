@@ -1,3 +1,4 @@
+import numpy as np
 import cv2
 from module.util import *
 from module.data import *
@@ -81,12 +82,17 @@ def union_intersection(img, regions):
 def split_horizontal_regions(img, regions):
     bin_img = img_to_binary(img)
     height, width = bin_img.shape
-    roi_img = bin_img.copy()
+
+    board = np.zeros((height, width), dtype="uint8")
+    board = 255 + board
+
     for region in regions:
         new_points = [(0, region.points[0][1]), (width, region.points[1][1])]
-        roi_img = draw_roi(bin_img, new_points, 0, -1)
+        board = draw_roi(board, new_points, 0, -1)
 
-    cv_imshow("roi", roi_img, 0)
+    region = make_regions(board, [], [])
+
+    return region
 
 
 def erase_region(img, regions):
@@ -117,11 +123,18 @@ if __name__ == "__main__":
     cv_imshow("roi", roi_img, 0)
 
     for roi in rois:
-        roi_img = draw_roi(roi_img, roi.points, [0, 255, 0], -1)
+        roi_img = draw_roi(roi_img, roi.points, [0, 255, 0], 1)
 
     cv_imshow("roi", roi_img, 0)
 
     erased_img, rois = erase_region(input_img, rois)
 
     cv_imshow("erase", erased_img, 0)
-    split_horizontal_regions(erased_img, rois)
+    rois = split_horizontal_regions(erased_img, rois)
+
+    roi_img = input_img.copy()
+    for roi in rois:
+        roi_img = draw_roi(roi_img, roi.points, [0, 255, 0], 1)
+
+    cv_imshow("roi", roi_img, 0)
+
