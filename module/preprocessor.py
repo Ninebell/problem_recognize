@@ -70,7 +70,7 @@ def make_regions(image, filters, filter_args, reverse=True):
 
 
 def union_intersection(img, regions):
-    bin_img = img_to_binary(img)
+    bin_img = img_to_binary(img).copy()
 
     for region in regions:
         bin_img = draw_image_region(bin_img, region.points, 0, -1)
@@ -97,16 +97,14 @@ def split_horizontal_regions(img, regions):
     return horizontal_region
 
 
-def erase_region(img, regions):
+def erase_region(img, regions, method, val):
     color = 255
     if len(img.shape) == 3:
         color = [255, 255, 255]
-    mid = mid_values(regions, lambda object: object.area)
-    print("mid {}".format(mid))
     erase_regions = []
     new_regions = []
     for image_region in regions:
-        if image_region.area > mid*10:
+        if method(image_region.area, val):
             erase_regions.append(image_region)
         else:
             new_regions.append(image_region)
@@ -176,14 +174,39 @@ def split_vertical_regions(img):
     return word_images, word_regions
 
 
+
+def bigger(obj, value):
+    return obj > value
+
+
+def smaller(obj, value):
+    return obj < value
+
+
+
 def image_regular(image):
-    binary_image = img_to_binary(image)
-    roi = cv2.resize(binary_image, (54, 54), cv2.INTER_CUBIC)
+    binary_image = img_to_binary(image).copy()
+    binary_image = cv2.resize(binary_image, (54, 54), cv2.INTER_CUBIC)
+    regions, _ = make_regions(binary_image, [], [])
+
+    binary_image, _ = erase_region(binary_image, regions, smaller, 64)
+    regions, _ = make_regions(binary_image, [], [])
+
+    temp_points = []
+    for roi in regions:
+        for pt in roi.points:
+            temp_points.append([pt])
+    final_roi = make_rect(temp_points)
+    pts = final_roi.points
+    binary_image = binary_image[pts[0][1]:pts[1][1], pts[0][0]:pts[1][0]]
+    binary_image = cv2.resize(binary_image, (54, 54), cv2.INTER_CUBIC)
     board = np.zeros((64, 64), dtype="uint8")
     board = 255 + board
-    board[5:59, 5:59] = roi
+    board[5:59, 5:59] = binary_image
     cv2.destroyWindow("board")
-    _, board = cv2.threshold(board,125, 255, cv2.THRESH_OTSU)
+
+    _, board = cv2.threshold(board, 100, 255, cv2.THRESH_OTSU)
+
     cv_imshow("board", board, 0)
     return board
 
@@ -193,7 +216,10 @@ if __name__ == "__main__":
     image_region_img = input_img.copy()
     image_regions, _ = make_regions(input_img, [size_filter], [[10, ]])
     image_regions = union_intersection(input_img, image_regions)
-    erased_img, image_regions = erase_region(input_img, image_regions)
+
+    erase_regions = []
+    mid = mid_values(image_regions, lambda obj: obj.area)
+    erased_img, image_regions = erase_region(input_img, image_regions, bigger, mid * 10)
     vertical_regions = split_horizontal_regions(erased_img, image_regions)
 
     word_images = []
