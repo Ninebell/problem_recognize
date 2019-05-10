@@ -144,6 +144,7 @@ def split_vertical_regions(img):
     for region in vertical_regions:
         pts = [(region.points[0][0], 0), (region.points[1][0], 30)]
         temp = word_image[pts[0][1]:pts[1][1], pts[0][0]:pts[1][0]]
+
         temp_region, _ = make_regions(temp, [], [])
         temp_points = []
 
@@ -151,6 +152,9 @@ def split_vertical_regions(img):
             for pt in roi.points:
                 temp_points.append([pt])
         final_roi = make_rect(temp_points)
+        final_roi.points[0] = (final_roi.points[0][0], final_roi.points[0][1])
+        final_roi.points[1] = (final_roi.points[1][0]+2, final_roi.points[1][1]+2)
+
         pts = final_roi.points
         if final_roi.ratio > 1.5:
             pts = final_roi.points
@@ -159,8 +163,11 @@ def split_vertical_regions(img):
             pts2 = [(pts[0][0]+diff, pts[0][1]), (pts[1][0], pts[1][1])]
             word_regions.append(Rectangle(pts1))
             word_regions.append(Rectangle(pts2))
-            word_images.append(temp[pts1[0][1]:pts1[1][1], pts1[0][0]:pts1[1][0]])
-            word_images.append(temp[pts2[0][1]:pts2[1][1], pts2[0][0]:pts2[1][0]])
+            word1 = temp[pts1[0][1]:pts1[1][1], pts1[0][0]:pts1[1][0]]
+            word2 = temp[pts2[0][1]:pts2[1][1], pts2[0][0]:pts2[1][0]]
+            word_images.append(word1)
+            word_images.append(word2)
+
         else:
             pts = final_roi.points
             word_regions.append(final_roi)
@@ -169,17 +176,24 @@ def split_vertical_regions(img):
     return word_images, word_regions
 
 
+def image_regular(image):
+    binary_image = img_to_binary(image)
+    roi = cv2.resize(binary_image, (54, 54), cv2.INTER_CUBIC)
+    board = np.zeros((64, 64), dtype="uint8")
+    board = 255 + board
+    board[5:59, 5:59] = roi
+    cv2.destroyWindow("board")
+    _, board = cv2.threshold(board,125, 255, cv2.THRESH_OTSU)
+    cv_imshow("board", board, 0)
+    return board
+
+
 if __name__ == "__main__":
     input_img = sample_img()
     image_region_img = input_img.copy()
     image_regions, _ = make_regions(input_img, [size_filter], [[10, ]])
-
     image_regions = union_intersection(input_img, image_regions)
-
     erased_img, image_regions = erase_region(input_img, image_regions)
-
-    cv_imshow("erased", erased_img, 0)
-
     vertical_regions = split_horizontal_regions(erased_img, image_regions)
 
     word_images = []
@@ -192,7 +206,6 @@ if __name__ == "__main__":
         word_regions = word_regions + temp_region
 
     for idx, word in enumerate(word_images):
+        image_regular(word)
         print(word_regions[idx].ratio)
-        cv2.destroyWindow("word")
-        cv_imshow("word", word, 0)
 
