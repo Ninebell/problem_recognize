@@ -1,4 +1,5 @@
 module/__pycache__/*
 model/YOLO/*
 *.PNG
+*.jpg
 *.h5
