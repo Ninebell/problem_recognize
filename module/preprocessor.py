@@ -85,9 +85,16 @@ def split_horizontal_regions(img, regions):
     bin_img = img_to_binary(img)
     height, width = bin_img.shape
 
+    regions.sort(key=lambda obj: obj.height)
+
     board = np.zeros((height, width), dtype="uint8")
     board = 255 + board
+    if len(regions) > 5:
+        regions = regions[:-5]
+        regions.sort(key=lambda obj:obj.area)
 
+        if len(regions) > 5:
+            regions = regions[5:]
     for region in regions:
         new_points = [(0, region.points[0][1]), (width, region.points[1][1])]
         board = draw_image_region(board, new_points, 0, -1)
@@ -119,6 +126,32 @@ def union_region(r1, r2):
     return Rectangle([(r1.points[0]), (r2.points[1])])
 
 
+
+def split_vertical_regions_temp(img):
+    bin_img = img_to_binary(img)
+    height, width = bin_img.shape
+
+    image_region_img = bin_img.copy()
+    basic_regions, _ = make_regions(image_region_img, [], [])
+
+    union_region = union_intersection(image_region_img, basic_regions)
+    union_region.sort(key=lambda region:region.width)
+    limit = union_region[len(union_region)//3].width
+    union_region.sort(key=lambda region:region.points[0][0])
+
+    word_images = []
+
+    for idx, region in enumerate(union_region):
+        pts = [(region.points[0][0], 0), (region.points[1][0], height)]
+
+        image_region_img = draw_image_region(image_region_img, pts, 0, -1)
+
+
+    region = make_regions(image_region_img, [], [])
+    return region
+
+
+
 def split_vertical_regions(img):
     bin_img = img_to_binary(img)
     height, width = bin_img.shape
@@ -130,15 +163,25 @@ def split_vertical_regions(img):
     basic_regions, _ = make_regions(image_region_img, [], [])
 
     union_region = union_intersection(image_region_img, basic_regions)
+    union_region.sort(key=lambda region:region.width)
+    limit = union_region[len(union_region)//3].width
     union_region.sort(key=lambda region:region.points[0][0])
+
     word_images = []
-    for region in union_region:
+
+    for idx, region in enumerate(union_region):
         pts = [(region.points[0][0], 0), (region.points[1][0], 30)]
+
+        if region.width < limit and idx > 0 and (region.points[0][0] - union_region[idx-1].points[1][0]) < region.width:
+            pts = [(union_region[idx-1].points[0][0], 0), (region.points[1][0], 30)]
+
         image_region_img = draw_image_region(image_region_img, pts, 0, -1)
 
+
     vertical_regions, _ = make_regions(image_region_img, [], [])
-    vertical_regions.sort(key=lambda region:region.points[0][0])
+    vertical_regions.sort(key=lambda region : region.points[0][0])
     word_regions = []
+
     for region in vertical_regions:
         pts = [(region.points[0][0], 0), (region.points[1][0], 30)]
         temp = word_image[pts[0][1]:pts[1][1], pts[0][0]:pts[1][0]]
@@ -154,6 +197,7 @@ def split_vertical_regions(img):
         final_roi.points[1] = (final_roi.points[1][0]+2, final_roi.points[1][1]+2)
 
         pts = final_roi.points
+
         if final_roi.ratio > 1.5:
             pts = final_roi.points
             diff = (pts[1][0]-pts[0][0])//2
@@ -170,9 +214,25 @@ def split_vertical_regions(img):
             pts = final_roi.points
             word_regions.append(final_roi)
             word_images.append(temp[pts[0][1]:pts[1][1], pts[0][0]:pts[1][0]])
+    last_image = []
 
-    return word_images, word_regions
+    for word_image in word_images:
+        last_region, _ = make_regions(word_image, [], [])
+        last_region = union_intersection(word_image, last_region)
+        remove_region = []
+        if len(last_region) == 0:
+            continue
+        mid_val = mid_values(last_region, lambda obj:obj.area)
+        for l_roi in last_region:
+            if l_roi.area < (mid_val/2):
+                remove_region.append(l_roi)
 
+        for erase in remove_region:
+            word_image = draw_image_region(word_image, erase.points, 255, -1)
+            word_image = draw_image_region(word_image, erase.points, 255, 1)
+        last_image.append(word_image)
+
+    return last_image, word_regions
 
 
 def bigger(obj, value):
@@ -183,13 +243,13 @@ def smaller(obj, value):
     return obj < value
 
 
-
-def image_regular(image):
+def image_regular(image, erase_method=None, value=0):
     binary_image = img_to_binary(image).copy()
     binary_image = cv2.resize(binary_image, (54, 54), cv2.INTER_CUBIC)
     regions, _ = make_regions(binary_image, [], [])
 
-    binary_image, _ = erase_region(binary_image, regions, smaller, 64)
+    if erase_method is not None:
+        binary_image, _ = erase_region(binary_image, regions, erase_method, value)
     regions, _ = make_regions(binary_image, [], [])
 
     temp_points = []
@@ -205,21 +265,21 @@ def image_regular(image):
     board[5:59, 5:59] = binary_image
     cv2.destroyWindow("board")
 
-    _, board = cv2.threshold(board, 100, 255, cv2.THRESH_OTSU)
+    _, board = cv2.threshold(board, 200, 255, cv2.THRESH_OTSU)
 
-    cv_imshow("board", board, 0)
     return board
 
 
-if __name__ == "__main__":
-    input_img = sample_img()
+def split_img_to_words(input_img):
     image_region_img = input_img.copy()
     image_regions, _ = make_regions(input_img, [size_filter], [[10, ]])
     image_regions = union_intersection(input_img, image_regions)
 
     erase_regions = []
     mid = mid_values(image_regions, lambda obj: obj.area)
+
     erased_img, image_regions = erase_region(input_img, image_regions, bigger, mid * 10)
+
     vertical_regions = split_horizontal_regions(erased_img, image_regions)
 
     word_images = []
@@ -230,8 +290,15 @@ if __name__ == "__main__":
         words, temp_region = split_vertical_regions(erased_img[points[0][1]:points[1][1], points[0][0]:points[1][0]])
         word_images = word_images + words
         word_regions = word_regions + temp_region
-
+    regular_images = []
     for idx, word in enumerate(word_images):
-        image_regular(word)
+        regular_images.append(image_regular(word, smaller, 64))
         print(word_regions[idx].ratio)
+    return regular_images
 
+
+if __name__ == "__main__":
+    img = sample_img()
+    words = split_img_to_words(img)
+    for word in words:
+        cv_imshow("word", word, 0)
